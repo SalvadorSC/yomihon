@@ -10,6 +10,13 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - `Fixed` - for any bug fixes.
 - `Other` - for technical stuff.
 
+## [v0.4.3] - 2026-10-18
+
+### Fixed
+- Fix missing page number
+- Fix default navigator orientation
+- Fix saved searches for local source
+
 ## [v0.4.2] - 2026-09-20
 
 ### Improved
