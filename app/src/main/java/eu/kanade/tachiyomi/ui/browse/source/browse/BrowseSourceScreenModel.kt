@@ -21,7 +21,6 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.data.cache.CoverCache
-import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
@@ -195,8 +194,6 @@ class BrowseSourceScreenModel(
         search: SavedSearchItem,
         onToast: (StringResource) -> Unit,
     ) {
-        if (source !is CatalogueSource) return
-
         if (search.hasFilters && search.filterList == null) {
             onToast(MR.strings.save_search_invalid)
             return
@@ -222,8 +219,6 @@ class BrowseSourceScreenModel(
     }
 
     fun saveSearch(name: String) {
-        if (source !is CatalogueSource) return
-
         screenModelScope.launchIO {
             val query = state.value.toolbarQuery
                 ?.takeUnless {
@@ -403,8 +398,6 @@ class BrowseSourceScreenModel(
     }
 
     private fun loadSavedSearches(savedSearches: List<SavedSearch>): List<SavedSearchItem> {
-        val source = source as? CatalogueSource ?: return emptyList()
-
         return savedSearches.map { savedSearch ->
             val defaultFilters = source.getFilterList()
             val hasFilters = !savedSearch.filtersJson.isNullOrBlank()
