@@ -25,12 +25,15 @@ import mihon.domain.dictionary.audio.DictionaryAudioRepository
 import mihon.domain.dictionary.audio.DictionaryAudioResult
 import mihon.domain.dictionary.interactor.DictionaryInteractor
 import mihon.domain.dictionary.interactor.SearchDictionaryTerms
+import mihon.domain.dictionary.interactor.preferringChineseForHanzi
 import mihon.domain.dictionary.model.Dictionary
 import mihon.domain.dictionary.model.DictionaryTerm
 import mihon.domain.dictionary.model.DictionaryTermMeta
 import mihon.domain.dictionary.model.buildGlossaryHtmlBundle
 import mihon.domain.dictionary.model.createGroupedTermCard
 import mihon.domain.dictionary.service.toHtml
+import mihon.domain.ocr.model.prefersChineseScript
+import mihon.domain.ocr.service.OcrPreferences
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.ankidroid.service.AnkiDroidPreferences
 import tachiyomi.i18n.MR
@@ -46,6 +49,7 @@ class DictionarySearchScreenModel(
     private val ankiDroidPreferences: AnkiDroidPreferences = Injekt.get(),
     private val dictionaryAudioRepository: DictionaryAudioRepository = Injekt.get(),
     private val dictionaryAudioPlayer: DictionaryAudioPlayer = Injekt.get(),
+    private val ocrPreferences: OcrPreferences = Injekt.get(),
 ) : StateScreenModel<DictionarySearchScreenModel.State>(State()) {
 
     val snackbarHostState = SnackbarHostState()
@@ -162,6 +166,10 @@ class DictionarySearchScreenModel(
 
                 // Get the longest dictionary match starting from the first character (or words).
                 val parserLanguage = dictionaryPreferences.parserLanguageOverride().get()
+                    .preferringChineseForHanzi(
+                        text = sentence,
+                        chineseOcrActive = ocrPreferences.ocrModel().get().prefersChineseScript,
+                    )
                 val firstWordMatch = searchDictionaryTerms.findFirstWordMatch(
                     sentence,
                     enabledDictionaryIds,

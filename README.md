@@ -53,6 +53,40 @@ Core Reader Features:
 * Create backups locally to read offline or to your desired cloud service.
 * Plus much more...
 
+## Simplified Chinese (offline)
+
+This fork can recognize Simplified Chinese on the phone. The model is bundled in the APK. Selecting it does not download weights and does not upload the page.
+
+1. Install the arm64 APK (see below).
+2. Open **More → Text recognition**.
+3. Set **Text recognition model** to **Chinese (offline)**.
+4. Leave **Strict offline** on. Google Lens and OwOCR are hidden, and images are not sent to them even when **Use fallback models** is on.
+5. Import the Yomitan [CC-CEDICT](https://github.com/MarvNC/cc-cedict-yomitan) dictionary (`CC-CEDICT.zip`). With **Chinese (offline)** selected, **Settings → Advanced → Parser language = Auto** treats pure hanzi as Chinese. You can also set the parser to **Chinese**. Kana still uses the Japanese parser.
+6. Read in **webtoon** mode (long-strip). Long-press a bubble and drag a box around the text. A box that crosses a split between two strips is stitched back together before recognition. Turn on **Activate OCR on long tap** in the reader settings if a long-press opens the page menu instead.
+
+Build an arm64 release without Firebase. Do not pass `-Pinclude-telemetry`.
+
+```sh
+# Japanese manga-ocr weights are still required for the Legacy and Fast engines.
+# Chinese recognition does not use those files. See CONTRIBUTING.md for the file names and checksums.
+./gradlew assembleRelease
+adb install -r app/build/outputs/apk/release/app-arm64-v8a-release.apk
+```
+
+The release signing config falls back to the debug keystore when `keystore.properties` is absent, so the APK can be installed for personal use.
+
+### Staying in sync with upstream
+
+Yomihon upstream is <https://github.com/yomihon/yomihon>. Chinese-only code lives in new files where possible (`data/.../ocr/zh/`, the offline-policy types). After an upstream release:
+
+```sh
+git remote add upstream https://github.com/yomihon/yomihon   # once
+git fetch upstream
+git rebase upstream/main
+```
+
+Rebuild with `./gradlew assembleRelease` and without `-Pinclude-telemetry`.
+
 ## 🤝 Contributing
 
 Feature requests, bug reports, and pull requests are welcome. For major changes, please open an issue or join our [discord](https://discord.com/invite/TXvTZdBuQa) to discuss what you would like to change.

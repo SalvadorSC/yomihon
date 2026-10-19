@@ -90,7 +90,7 @@ jobs:
           path: .
 
       - name: Build
-        run: ./gradlew assembleRelease -Pinclude-telemetry -Penable-updater
+        run: ./gradlew assembleRelease -Penable-updater
         env:
           storeFileBase64: ${{ secrets.SIGNING_KEY }}
           storePassword: ${{ secrets.KEY_STORE_PASSWORD }}

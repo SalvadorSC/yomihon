@@ -266,6 +266,26 @@ class SentenceParserTest {
     }
 
     @Test
+    fun `chinese parser segments hanzi without japanese deinflection`() = runTest {
+        coEvery { dictionaryRepository.searchTerms("食べる", testDictionaryIds) } returns listOf(
+            mockTerm("食べる", "たべる", "v1"),
+        )
+        coEvery { dictionaryRepository.searchTerms("你好", testDictionaryIds) } returns listOf(
+            mockTerm("你好"),
+        )
+
+        val deinflected = searchDictionaryTerms.findFirstWord("食べた", testDictionaryIds, ParserLanguage.AUTO)
+        val chineseVerb = searchDictionaryTerms.findFirstWord("食べた", testDictionaryIds, ParserLanguage.CHINESE)
+        val chineseWord = searchDictionaryTerms.findFirstWord("你好世界", testDictionaryIds, ParserLanguage.CHINESE)
+
+        // Japanese keeps the surface span once deinflection finds 食べる. Chinese does not deinflect.
+        deinflected shouldBe "食べた"
+        chineseVerb shouldBe "食"
+        chineseWord shouldBe "你好"
+        coVerify(atLeast = 1) { dictionarySearchGateway.exactSearch("食べる", testDictionaryIds) }
+    }
+
+    @Test
     fun `segments Chinese text by longest character match`() = runTest {
         coEvery { dictionaryRepository.searchTerms("你好", testDictionaryIds) } returns listOf(
             mockTerm("你好"),

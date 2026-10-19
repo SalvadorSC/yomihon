@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.reader
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.RectF
 import androidx.core.graphics.createBitmap
 import eu.kanade.tachiyomi.data.database.models.toDomainChapter
@@ -49,28 +50,29 @@ internal class ReaderSelectionCropper(
             }
 
             try {
-                val minLeft = parts.minOf { it.screenRect.left }
-                val minTop = parts.minOf { it.screenRect.top }
-                val positionedParts = parts.map { part ->
-                    PositionedSelectionPart(
-                        bitmap = part.bitmap,
-                        left = part.screenRect.left - minLeft,
-                        top = part.screenRect.top - minTop,
-                    )
-                }
-                val mergedWidth = positionedParts
-                    .maxOf { it.left + it.bitmap.width }
-                    .toInt()
-                    .coerceAtLeast(1)
-                val mergedHeight = positionedParts
-                    .maxOf { it.top + it.bitmap.height }
-                    .toInt()
-                    .coerceAtLeast(1)
-                val mergedBitmap = createBitmap(mergedWidth, mergedHeight)
+                val layout = layoutSelectionStitch(
+                    parts.map { part ->
+                        SelectionStitchPart(
+                            screenLeft = part.screenRect.left,
+                            screenTop = part.screenRect.top,
+                            screenRight = part.screenRect.right,
+                            screenBottom = part.screenRect.bottom,
+                            bitmapWidth = part.bitmap.width,
+                            bitmapHeight = part.bitmap.height,
+                        )
+                    },
+                ) ?: return null
+                val mergedBitmap = createBitmap(layout.width, layout.height)
                 val canvas = Canvas(mergedBitmap)
-
-                positionedParts.forEach { part ->
-                    canvas.drawBitmap(part.bitmap, part.left, part.top, null)
+                val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+                parts.forEachIndexed { index, part ->
+                    val slot = layout.slots[index]
+                    canvas.drawBitmap(
+                        part.bitmap,
+                        null,
+                        RectF(slot.left, slot.top, slot.right, slot.bottom),
+                        paint,
+                    )
                 }
 
                 logcat(LogPriority.DEBUG) {
@@ -142,10 +144,4 @@ internal class ReaderSelectionCropper(
 private data class CroppedSelectionPart(
     val bitmap: Bitmap,
     val screenRect: RectF,
-)
-
-private data class PositionedSelectionPart(
-    val bitmap: Bitmap,
-    val left: Float,
-    val top: Float,
 )

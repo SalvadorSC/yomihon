@@ -9,6 +9,8 @@ import logcat.LogPriority
 import mihon.domain.ocr.interactor.ClearCachedChapterOcr
 import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.interactor.WithOcrScanSession
+import mihon.domain.ocr.model.OcrOfflinePolicy
+import mihon.domain.ocr.service.OcrPreferences
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.download.service.DownloadPreferences
@@ -23,6 +25,7 @@ internal class OcrChapterScanner(
     private val scanPageOcr: ScanPageOcr,
     private val pageSourceResolver: OcrPageSourceResolver,
     private val downloadPreferences: DownloadPreferences,
+    private val ocrPreferences: OcrPreferences,
 ) {
     suspend fun scanChapter(
         chapterId: Long,
@@ -188,6 +191,14 @@ internal class OcrChapterScanner(
     }
 
     private fun checkNetworkState(): String? {
+        if (
+            !OcrOfflinePolicy.chapterScanRequiresNetwork(
+                model = ocrPreferences.ocrModel().get(),
+                strictOffline = ocrPreferences.strictOffline().get(),
+            )
+        ) {
+            return null
+        }
         val state = context.activeNetworkState()
         return if (state.isOnline) {
             val requireWifi = downloadPreferences.downloadOnlyOverWifi.get()

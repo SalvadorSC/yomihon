@@ -15,4 +15,10 @@ class OcrPreferences(
     fun owocrAddress() = preferenceStore.getString("pref_owocr_address", "ws://10.0.2.2:7331")
 
     fun useFallbackModels() = preferenceStore.getBoolean("pref_use_fallback_models", true)
+
+    /**
+     * When enabled, network OCR engines are hidden and never used, including as a
+     * silent fallback. Defaults to on so a fresh install cannot upload page images.
+     */
+    fun strictOffline() = preferenceStore.getBoolean("pref_ocr_strict_offline", true)
 }

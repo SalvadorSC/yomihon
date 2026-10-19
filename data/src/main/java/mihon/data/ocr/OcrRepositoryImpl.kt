@@ -12,10 +12,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import logcat.LogPriority
+import mihon.data.ocr.zh.MlKitChineseOcrEngine
 import mihon.domain.ocr.exception.OcrException
 import mihon.domain.ocr.model.OcrBoundingBox
 import mihon.domain.ocr.model.OcrImage
 import mihon.domain.ocr.model.OcrModel
+import mihon.domain.ocr.model.OcrOfflinePolicy
 import mihon.domain.ocr.model.OcrPageResult
 import mihon.domain.ocr.model.OcrRegion
 import mihon.domain.ocr.model.OcrTextOrientation
@@ -36,6 +38,7 @@ class OcrRepositoryImpl(
     private val preferenceStore = AndroidPreferenceStore(context)
     private val ocrModelPref = preferenceStore.getEnum("pref_ocr_model", OcrModel.LEGACY)
     private val useFallbackModelsPref = preferenceStore.getBoolean("pref_use_fallback_models", true)
+    private val strictOfflinePref = preferenceStore.getBoolean("pref_ocr_strict_offline", true)
 
     private val environmentResult by lazy {
         runCatching { Environment.create() }
@@ -51,6 +54,7 @@ class OcrRepositoryImpl(
 
     private var legacyEngine: LegacyOcrEngine? = null
     private var fastEngine: FastOcrEngine? = null
+    private var zhMlkitEngine: MlKitChineseOcrEngine? = null
     private var glensEngine: GlensOcrEngine? = null
     private var owOcrEngine: OwOcrEngine? = null
     private var detEngine: DetOcrEngine? = null
@@ -74,16 +78,39 @@ class OcrRepositoryImpl(
     internal enum class EngineType {
         LEGACY,
         FAST,
+        ZH_MLKIT,
         GLENS,
         OWOCR,
     }
 
+    private fun selectedModel(): OcrModel {
+        return OcrOfflinePolicy.effectiveModel(
+            selected = ocrModelPref.get(),
+            strictOffline = strictOfflinePref.get(),
+        )
+    }
+
     private fun selectedEngineType(): EngineType {
-        return when (ocrModelPref.get()) {
+        return selectedModel().toEngineType()
+    }
+
+    private fun OcrModel.toEngineType(): EngineType {
+        return when (this) {
             OcrModel.LEGACY -> EngineType.LEGACY
             OcrModel.FAST -> EngineType.FAST
+            OcrModel.ZH_MLKIT -> EngineType.ZH_MLKIT
             OcrModel.GLENS -> EngineType.GLENS
             OcrModel.OWOCR -> EngineType.OWOCR
+        }
+    }
+
+    private fun EngineType.toModel(): OcrModel {
+        return when (this) {
+            EngineType.LEGACY -> OcrModel.LEGACY
+            EngineType.FAST -> OcrModel.FAST
+            EngineType.ZH_MLKIT -> OcrModel.ZH_MLKIT
+            EngineType.GLENS -> OcrModel.GLENS
+            EngineType.OWOCR -> OcrModel.OWOCR
         }
     }
 
@@ -101,15 +128,6 @@ class OcrRepositoryImpl(
             current = current.cause
         }
         return false
-    }
-
-    private fun fallbackFor(type: EngineType): EngineType {
-        return when (type) {
-            EngineType.GLENS -> EngineType.FAST
-            EngineType.FAST -> EngineType.GLENS
-            EngineType.LEGACY -> EngineType.GLENS
-            EngineType.OWOCR -> EngineType.GLENS
-        }
     }
 
     private fun requireEnvironment(): Environment {
@@ -134,6 +152,7 @@ class OcrRepositoryImpl(
                     legacyEngine = it
                 }
             }
+            EngineType.ZH_MLKIT -> chineseEngine()
             EngineType.GLENS -> {
                 glensEngine ?: GlensOcrEngine().also {
                     glensEngine = it
@@ -144,6 +163,12 @@ class OcrRepositoryImpl(
                     owOcrEngine = it
                 }
             }
+        }
+    }
+
+    private fun chineseEngine(): MlKitChineseOcrEngine {
+        return zhMlkitEngine ?: MlKitChineseOcrEngine().also {
+            zhMlkitEngine = it
         }
     }
 
@@ -171,12 +196,13 @@ class OcrRepositoryImpl(
         } catch (primaryError: Throwable) {
             if (primaryError is CancellationException) throw primaryError
 
-            if (!useFallbackModelsPref.get()) {
-                throw primaryError
-            }
-
-            val fallback = fallbackFor(primary)
-            if (fallback == primary) {
+            val fallbackModel = OcrOfflinePolicy.textFallback(
+                primary = primary.toModel(),
+                useFallbackModels = useFallbackModelsPref.get(),
+                strictOffline = strictOfflinePref.get(),
+            )
+            val fallback = fallbackModel?.toEngineType()
+            if (fallback == null || fallback == primary) {
                 throw primaryError
             }
 
@@ -211,7 +237,13 @@ class OcrRepositoryImpl(
     ): OcrPageResult {
         return withActiveOperation {
             val result = image.useBitmap { bitmap ->
-                when (val selectedModel = ocrModelPref.get()) {
+                when (val selectedModel = selectedModel()) {
+                    OcrModel.ZH_MLKIT -> scanWithChinese(
+                        chapterId = chapterId,
+                        pageIndex = pageIndex,
+                        image = bitmap,
+                        modelKey = selectedModel,
+                    )
                     OcrModel.GLENS -> scanWithGlens(
                         chapterId = chapterId,
                         pageIndex = pageIndex,
@@ -289,6 +321,27 @@ class OcrRepositoryImpl(
         }
     }
 
+    private suspend fun scanWithChinese(
+        chapterId: Long,
+        pageIndex: Int,
+        image: Bitmap,
+        modelKey: OcrModel,
+    ): OcrPageResult {
+        val regions = submitTask(PrioritizedTaskQueue.Priority.NORMAL) {
+            engineLocks.withTextEngineLock(EngineType.ZH_MLKIT) {
+                chineseEngine().recognizePage(image)
+            }
+        }
+        return OcrPageResult(
+            chapterId = chapterId,
+            pageIndex = pageIndex,
+            ocrModel = modelKey,
+            imageWidth = image.width,
+            imageHeight = image.height,
+            regions = regions,
+        )
+    }
+
     private suspend fun scanLocalOrFallback(
         chapterId: Long,
         pageIndex: Int,
@@ -305,7 +358,13 @@ class OcrRepositoryImpl(
                 type = type,
             )
         } catch (e: OcrException.DetectionUnavailable) {
-            if (!useFallbackModelsPref.get()) {
+            if (
+                !OcrOfflinePolicy.mayRedirectPageScanToNetwork(
+                    model = modelKey,
+                    useFallbackModels = useFallbackModelsPref.get(),
+                    strictOffline = strictOfflinePref.get(),
+                )
+            ) {
                 throw e
             }
             logcat(LogPriority.WARN, e) {
@@ -399,7 +458,13 @@ class OcrRepositoryImpl(
             )
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
-            if (!useFallbackModelsPref.get()) {
+            if (
+                !OcrOfflinePolicy.mayRedirectPageScanToNetwork(
+                    model = modelKey,
+                    useFallbackModels = useFallbackModelsPref.get(),
+                    strictOffline = strictOfflinePref.get(),
+                )
+            ) {
                 throw e
             }
             logcat(LogPriority.WARN, e) {
@@ -561,6 +626,9 @@ class OcrRepositoryImpl(
 
             fastEngine?.close()
             fastEngine = null
+
+            zhMlkitEngine?.close()
+            zhMlkitEngine = null
 
             glensEngine?.close()
             glensEngine = null
