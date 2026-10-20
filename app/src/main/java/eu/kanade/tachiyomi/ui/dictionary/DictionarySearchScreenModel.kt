@@ -24,6 +24,7 @@ import mihon.domain.dictionary.audio.DictionaryAudioPlayer
 import mihon.domain.dictionary.audio.DictionaryAudioRepository
 import mihon.domain.dictionary.audio.DictionaryAudioResult
 import mihon.domain.dictionary.interactor.DictionaryInteractor
+import mihon.domain.dictionary.interactor.ParserLanguage
 import mihon.domain.dictionary.interactor.SearchDictionaryTerms
 import mihon.domain.dictionary.interactor.preferringChineseForHanzi
 import mihon.domain.dictionary.model.Dictionary
@@ -32,6 +33,12 @@ import mihon.domain.dictionary.model.DictionaryTermMeta
 import mihon.domain.dictionary.model.buildGlossaryHtmlBundle
 import mihon.domain.dictionary.model.createGroupedTermCard
 import mihon.domain.dictionary.service.toHtml
+import mihon.domain.dictionary.zh.ChineseSentenceGuide
+import mihon.domain.dictionary.zh.ChineseSentenceSegmenter
+import mihon.domain.dictionary.zh.ChineseTranslationPolicy
+import mihon.domain.dictionary.zh.OfflineChineseTranslator
+import mihon.domain.dictionary.zh.orderTermsByPreferredReading
+import mihon.domain.dictionary.zh.toGuide
 import mihon.domain.ocr.model.prefersChineseScript
 import mihon.domain.ocr.service.OcrPreferences
 import tachiyomi.core.common.util.system.logcat
@@ -50,6 +57,8 @@ class DictionarySearchScreenModel(
     private val dictionaryAudioRepository: DictionaryAudioRepository = Injekt.get(),
     private val dictionaryAudioPlayer: DictionaryAudioPlayer = Injekt.get(),
     private val ocrPreferences: OcrPreferences = Injekt.get(),
+    private val chineseSegmenter: ChineseSentenceSegmenter = Injekt.get(),
+    private val offlineChineseTranslator: OfflineChineseTranslator = Injekt.get(),
 ) : StateScreenModel<DictionarySearchScreenModel.State>(State()) {
 
     val snackbarHostState = SnackbarHostState()
@@ -151,6 +160,7 @@ class DictionarySearchScreenModel(
                 isSearching = true,
                 results = (it.results ?: SearchResults(query = query)).copy(
                     highlightRange = highlightStart to highlightStart,
+                    sentence = null,
                 ),
             )
         }
@@ -223,6 +233,77 @@ class DictionarySearchScreenModel(
 
                 // Proactively check which result expressions already exist in AnkiDroid
                 checkExistingNotesInBackground(items.map { it.expression }.distinct())
+            } catch (e: Exception) {
+                mutableState.update { it.copy(isSearching = false) }
+                _events.send(Event.ShowError(UiMessage.Resource(MR.strings.dictionary_search_failed)))
+            }
+        }
+    }
+
+    /**
+     * Segment the whole bubble and look up each word in order.
+     * Translation is omitted when the offline model is not on the device.
+     */
+    fun searchChineseSentence(sentence: String) {
+        val text = sentence.trim()
+        if (text.isBlank()) {
+            mutableState.update { it.copy(results = null) }
+            return
+        }
+
+        mutableState.update {
+            it.copy(
+                query = text,
+                isSearching = true,
+                isFromExternal = true,
+            )
+        }
+
+        screenModelScope.launch {
+            try {
+                val enabledDictionaryIds = state.value.enabledDictionaryIds
+                val analysis = chineseSegmenter.segment(text)
+                val items = mutableListOf<DictionaryTerm>()
+                if (enabledDictionaryIds.isNotEmpty()) {
+                    for (word in analysis.words) {
+                        if (word.text.isBlank()) continue
+                        val hits = searchDictionaryTerms.search(
+                            word.text,
+                            enabledDictionaryIds,
+                            ParserLanguage.CHINESE,
+                        )
+                        items += orderTermsByPreferredReading(hits, word.pinyin)
+                    }
+                }
+                val expressions = items.map { it.expression }.distinct()
+                val termMetaMap = if (expressions.isEmpty() || enabledDictionaryIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    searchDictionaryTerms.getTermMeta(expressions, enabledDictionaryIds)
+                }
+                val modelOnDevice = offlineChineseTranslator.isModelDownloaded()
+                val translated = if (modelOnDevice) {
+                    offlineChineseTranslator.translateIfReady(analysis.text)
+                } else {
+                    null
+                }
+                mutableState.update {
+                    it.copy(
+                        query = analysis.text,
+                        results = SearchResults(
+                            query = analysis.text,
+                            items = items,
+                            termMetaMap = termMetaMap,
+                            sentence = analysis.toGuide(
+                                ChineseTranslationPolicy.forPopup(modelOnDevice, translated),
+                            ),
+                        ),
+                        isSearching = false,
+                        hasSearched = true,
+                        existingTermExpressions = emptySet(),
+                    )
+                }
+                checkExistingNotesInBackground(expressions)
             } catch (e: Exception) {
                 mutableState.update { it.copy(isSearching = false) }
                 _events.send(Event.ShowError(UiMessage.Resource(MR.strings.dictionary_search_failed)))
@@ -433,6 +514,7 @@ class DictionarySearchScreenModel(
         val highlightRange: Pair<Int, Int>? = null,
         val items: List<DictionaryTerm> = emptyList(),
         val termMetaMap: Map<String, List<DictionaryTermMeta>> = emptyMap(),
+        val sentence: ChineseSentenceGuide? = null,
     )
 
     @Immutable

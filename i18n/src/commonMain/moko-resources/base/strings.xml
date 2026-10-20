@@ -455,6 +455,13 @@
     <string name="pref_ocr_strict_offline">Strict offline</string>
     <string name="pref_ocr_strict_offline_summary">Keep text recognition on the device. Google Lens and OwOCR stay hidden, and page images are never uploaded.</string>
     <string name="pref_ocr_zh_offline_note">Chinese (offline) runs on the device. It does not fall back to online text recognition.</string>
+    <string name="pref_zh_translation_model">Chinese-English translation</string>
+    <string name="pref_zh_translation_model_action">Download translation model</string>
+    <string name="pref_zh_translation_model_ready">Model is on this device. Bubble popups can show an English translation. Reading does not use the network.</string>
+    <string name="pref_zh_translation_model_missing">Not downloaded. The translation line stays hidden until you download the model once. Reading never starts this download.</string>
+    <string name="pref_zh_translation_model_downloading">Downloading the Chinese-English model…</string>
+    <string name="pref_zh_translation_model_failed">The translation model could not be downloaded. Check the connection and try again.</string>
+    <string name="pref_zh_translation_model_note">One-time download, about 30 MB, only when you tap the button above. Strict offline still blocks the network while a page is open. Without the model, the popup shows the sentence, pinyin, and dictionary entries, and hides the translation.</string>
     <string name="pref_owocr_address">OwOCR Server Address</string>
     <string name="pref_owocr_address_summary">WebSocket URL of your self-hosted OwOCR instance</string>
     <string name="pref_owocr_address_note">You will need to configure your host's IP and make sure OwOCR is running with \"owocr -r websocket -w websocket\" or via the installer package, with read and write to websocket. Set the output format to JSON and use a proper model to process full pages with OwOCR.</string>

@@ -32,6 +32,9 @@ import mihon.domain.dictionary.interactor.SearchDictionaryTerms
 import mihon.domain.dictionary.model.Dictionary
 import mihon.domain.dictionary.model.DictionaryTerm
 import mihon.domain.dictionary.model.DictionaryTermCard
+import mihon.domain.dictionary.zh.ChineseSentenceSegmenter
+import mihon.domain.dictionary.zh.MapChineseLexicon
+import mihon.domain.dictionary.zh.OfflineChineseTranslator
 import mihon.domain.ocr.model.OcrModel
 import mihon.domain.ocr.service.OcrPreferences
 import org.junit.jupiter.api.AfterEach
@@ -276,6 +279,8 @@ class DictionarySearchScreenModelTest {
             coEvery { it.getAllDictionaries() } returns emptyList()
         },
         ocrPreferences: OcrPreferences = OcrPreferences(InMemoryPreferenceStore()),
+        chineseSegmenter: ChineseSentenceSegmenter = ChineseSentenceSegmenter(MapChineseLexicon(emptyMap())),
+        offlineChineseTranslator: OfflineChineseTranslator = OfflineChineseTranslator.Unavailable,
     ): DictionarySearchScreenModel {
         return DictionarySearchScreenModel(
             searchDictionaryTerms = searchDictionaryTerms,
@@ -287,15 +292,98 @@ class DictionarySearchScreenModelTest {
             dictionaryAudioRepository = dictionaryAudioRepository,
             dictionaryAudioPlayer = dictionaryAudioPlayer,
             ocrPreferences = ocrPreferences,
+            chineseSegmenter = chineseSegmenter,
+            offlineChineseTranslator = offlineChineseTranslator,
         )
     }
 
-    private fun sampleTerm(): DictionaryTerm {
+    @Test
+    fun `chinese sentence search lists words in order and hides translation without a model`() = runTest(dispatcher) {
+        val search = mockk<SearchDictionaryTerms>()
+        coEvery { search.search(any(), any(), any()) } coAnswers {
+            val word = firstArg<String>()
+            if (word == "好") {
+                listOf(
+                    sampleTerm(expression = "好", reading = "hào"),
+                    sampleTerm(expression = "好", reading = "hǎo"),
+                )
+            } else {
+                listOf(sampleTerm(expression = word, reading = "x"))
+            }
+        }
+        coEvery { search.getTermMeta(any(), any()) } returns emptyMap()
+        val dictionaryInteractor = mockk<DictionaryInteractor>()
+        coEvery { dictionaryInteractor.getAllDictionaries() } returns listOf(
+            Dictionary(id = 7L, title = "CC-CEDICT", revision = "1", version = 1),
+        )
+        val model = createModel(
+            searchDictionaryTerms = search,
+            dictionaryInteractor = dictionaryInteractor,
+            chineseSegmenter = ChineseSentenceSegmenter(
+                MapChineseLexicon(
+                    mapOf(
+                        "今天" to "jīntiān",
+                        "天气" to "tiānqì",
+                        "天天" to "tiāntiān",
+                        "真" to "zhēn",
+                        "好" to "hǎo",
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        model.searchChineseSentence("今天天气真好")
+        advanceUntilIdle()
+
+        val results = model.state.value.results
+        assertEquals(listOf("今天", "天气", "真", "好", "好"), results?.items?.map { it.expression })
+        assertEquals(listOf("hǎo", "hào"), results?.items?.filter { it.expression == "好" }?.map { it.reading })
+        assertEquals("jīntiān tiānqì zhēn hǎo", results?.sentence?.pinyin)
+        assertEquals(null, results?.sentence?.translation)
+        coVerify(exactly = 0) { search.findFirstWordMatch(any(), any(), any()) }
+    }
+
+    @Test
+    fun `chinese sentence search shows a translation when the model is already downloaded`() = runTest(dispatcher) {
+        val search = mockk<SearchDictionaryTerms>(relaxed = true)
+        coEvery { search.search(any(), any(), any()) } returns emptyList()
+        coEvery { search.getTermMeta(any(), any()) } returns emptyMap()
+        val dictionaryInteractor = mockk<DictionaryInteractor>()
+        coEvery { dictionaryInteractor.getAllDictionaries() } returns listOf(
+            Dictionary(id = 7L, title = "CC-CEDICT", revision = "1", version = 1),
+        )
+        val translator = object : OfflineChineseTranslator {
+            override suspend fun isModelDownloaded(): Boolean = true
+
+            override suspend fun translateIfReady(text: String): String = "The weather is nice today."
+
+            override suspend fun downloadModel(): Result<Unit> = Result.success(Unit)
+        }
+        val model = createModel(
+            searchDictionaryTerms = search,
+            dictionaryInteractor = dictionaryInteractor,
+            chineseSegmenter = ChineseSentenceSegmenter(MapChineseLexicon(mapOf("好" to "hǎo"))),
+            offlineChineseTranslator = translator,
+        )
+        advanceUntilIdle()
+
+        model.searchChineseSentence("好")
+        advanceUntilIdle()
+
+        assertEquals("The weather is nice today.", model.state.value.results?.sentence?.translation)
+        assertEquals("hǎo", model.state.value.results?.sentence?.pinyin)
+    }
+
+    private fun sampleTerm(
+        expression: String = "日本語",
+        reading: String = "にほんご",
+    ): DictionaryTerm {
         return DictionaryTerm(
             id = 1L,
             dictionaryId = 1L,
-            expression = "日本語",
-            reading = "にほんご",
+            expression = expression,
+            reading = reading,
             definitionTags = null,
             rules = null,
             score = 0,

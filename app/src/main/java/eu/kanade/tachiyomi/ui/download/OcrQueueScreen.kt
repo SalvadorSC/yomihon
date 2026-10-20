@@ -215,6 +215,7 @@ object OcrQueueScreen : Screen() {
                 )
                 if (ocrModel == OcrModel.ZH_MLKIT) {
                     InfoWidget(text = stringResource(MR.strings.pref_ocr_zh_offline_note))
+                    ChineseTranslationModelPreference()
                 }
                 if (ocrModel == OcrModel.OWOCR) {
                     EditTextPreferenceWidget(

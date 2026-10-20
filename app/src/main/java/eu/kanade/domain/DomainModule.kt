@@ -43,6 +43,8 @@ import mihon.data.dictionary.DictionaryRepositoryImpl
 import mihon.data.dictionary.DictionarySearchGatewayImpl
 import mihon.data.dictionary.HoshiDictionaryStore
 import mihon.data.dictionary.LegacyDictionaryArchiveBuilder
+import mihon.data.dictionary.zh.AssetChineseLexicon
+import mihon.data.dictionary.zh.MlKitOfflineChineseTranslator
 import mihon.data.extension.repository.ExtensionStoreRepositoryImpl
 import mihon.data.extension.service.ExtensionStoreService
 import mihon.data.ocr.OcrRepositoryImpl
@@ -63,6 +65,8 @@ import mihon.domain.dictionary.service.DictionaryParser
 import mihon.domain.dictionary.service.DictionarySearchBackend
 import mihon.domain.dictionary.service.DictionarySearchGateway
 import mihon.domain.dictionary.service.DictionaryStorageGateway
+import mihon.domain.dictionary.zh.ChineseSentenceSegmenter
+import mihon.domain.dictionary.zh.OfflineChineseTranslator
 import mihon.domain.extension.interactor.AddExtensionStore
 import mihon.domain.extension.interactor.GetExtensionStoreCountAsFlow
 import mihon.domain.extension.interactor.GetExtensionStores
@@ -278,6 +282,8 @@ class DomainModule : InjektModule {
         addSingletonFactory<DictionaryArchiveBuilder> { get<LegacyDictionaryArchiveBuilder>() }
         addFactory { DictionaryInteractor(get()) }
         addFactory { SearchDictionaryTerms(get(), get()) }
+        addSingletonFactory { ChineseSentenceSegmenter(AssetChineseLexicon(get<Application>())) }
+        addSingletonFactory<OfflineChineseTranslator> { MlKitOfflineChineseTranslator() }
         addSingletonFactory<DictionaryAudioRepository> { DictionaryAudioRepositoryImpl(get<Application>(), get()) }
         addSingletonFactory<DictionaryAudioPlayer> { DictionaryAudioPlayerImpl() }
 
