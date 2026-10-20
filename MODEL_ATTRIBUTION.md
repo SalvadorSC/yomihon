@@ -4,6 +4,8 @@
 
 **Chinese (offline)** uses Google ML Kit Text Recognition v2 for Chinese, artifact `com.google.mlkit:text-recognition-chinese` (bundled model, not the Play Services download). The model is closed source and is packaged inside the APK. It is not fetched at runtime.
 
+Tap-a-bubble detection uses those ML Kit text blocks, grouped on the device into bubbles. It does not use the panel detector below, including that model's speech-bubble class. The panel detector stays limited to the existing panel-navigation feature.
+
 This repository includes support for an experimental manga panel detection model that is fetched separately during local setup and release packaging.
 
 ## Panel Detection Model

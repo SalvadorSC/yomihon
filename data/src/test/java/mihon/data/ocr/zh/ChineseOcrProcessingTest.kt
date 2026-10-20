@@ -1,6 +1,7 @@
 package mihon.data.ocr.zh
 
 import mihon.data.ocr.TextPostprocessor
+import mihon.domain.ocr.model.OcrTextOrientation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -61,6 +62,56 @@ class ChineseOcrProcessingTest {
         )
         assertTrue(ChineseOcrLayout.isVertical(lines))
         assertEquals("你好吗", ChineseOcrLayout.assemble(lines))
+    }
+
+    @Test
+    fun nearbyLinesMergeIntoOneBubbleAndDistantBubblesStaySplit() {
+        val regions = ChineseBubbleGrouper.group(
+            blocks = listOf(
+                block("你好世界", left = 100f, top = 100f, right = 300f, bottom = 140f),
+                block("今天天气", left = 110f, top = 150f, right = 280f, bottom = 190f),
+                block("不", left = 700f, top = 800f, right = 900f, bottom = 860f),
+            ),
+            imageWidth = 1000,
+            imageHeight = 1000,
+        )
+        assertEquals(listOf("你好世界今天天气", "不"), regions.map { it.text })
+        assertEquals(OcrTextOrientation.Horizontal, regions[0].textOrientation)
+        assertTrue(regions[0].boundingBox.top < regions[1].boundingBox.top)
+        assertTrue(regions[0].boundingBox.bottom > 0.18f)
+        assertTrue(regions[0].boundingBox.bottom < 0.22f)
+    }
+
+    @Test
+    fun verticalBubblesAreOrderedRightToLeft() {
+        val regions = ChineseBubbleGrouper.group(
+            blocks = listOf(
+                block("左", left = 0f, top = 0f, right = 20f, bottom = 80f, angleDegrees = 90f),
+                block("右", left = 80f, top = 0f, right = 100f, bottom = 80f, angleDegrees = 90f),
+            ),
+            imageWidth = 200,
+            imageHeight = 200,
+        )
+        assertEquals(listOf("右", "左"), regions.map { it.text })
+        assertEquals(OcrTextOrientation.Vertical, regions[0].textOrientation)
+        assertTrue(regions[0].boundingBox.left > regions[1].boundingBox.left)
+    }
+
+    private fun block(
+        text: String,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        angleDegrees: Float = 0f,
+    ): ChineseTextBlock {
+        return ChineseTextBlock(
+            lines = listOf(line(text, left, top, right, bottom, angleDegrees)),
+            left = left,
+            top = top,
+            right = right,
+            bottom = bottom,
+        )
     }
 
     private fun line(

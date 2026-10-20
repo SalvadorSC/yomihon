@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
 import mihon.core.archive.ZipWriter
+import mihon.domain.ocr.model.OcrOfflinePolicy
 import mihon.domain.ocr.service.OcrPreferences
 import nl.adaptivity.xmlutil.serialization.XML
 import okhttp3.Response
@@ -418,7 +419,13 @@ class Downloader(
             DiskUtil.createNoMediaFile(tmpDir, context)
 
             download.status = Download.State.DOWNLOADED
-            if (ocrPreferences.autoOcrOnDownload().get()) {
+            if (
+                OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                    model = ocrPreferences.ocrModel().get(),
+                    strictOffline = ocrPreferences.strictOffline().get(),
+                    autoOnDownload = ocrPreferences.autoOcrOnDownload().get(),
+                )
+            ) {
                 try {
                     ocrScanManager.enqueue(listOf(download.chapter.id))
                 } catch (e: Throwable) {

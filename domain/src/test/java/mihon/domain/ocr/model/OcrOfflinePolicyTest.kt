@@ -111,6 +111,63 @@ class OcrOfflinePolicyTest {
     }
 
     @Test
+    fun chineseEngineScansDownloadedChaptersWithoutTheAutoToggle() {
+        assertTrue(
+            OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                model = OcrModel.ZH_MLKIT,
+                strictOffline = true,
+                autoOnDownload = false,
+            ),
+        )
+        assertTrue(
+            OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                model = OcrModel.ZH_MLKIT,
+                strictOffline = false,
+                autoOnDownload = false,
+            ),
+        )
+        assertFalse(
+            OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                model = OcrModel.LEGACY,
+                strictOffline = true,
+                autoOnDownload = false,
+            ),
+        )
+        assertFalse(
+            OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                model = OcrModel.GLENS,
+                strictOffline = true,
+                autoOnDownload = false,
+            ),
+        )
+        assertTrue(
+            OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                model = OcrModel.LEGACY,
+                strictOffline = false,
+                autoOnDownload = true,
+            ),
+        )
+        assertTrue(
+            OcrOfflinePolicy.shouldScanChapterAfterDownload(
+                model = OcrModel.GLENS,
+                strictOffline = false,
+                autoOnDownload = true,
+            ),
+        )
+    }
+
+    @Test
+    fun readerDetectsPagesOnlyForTheChineseEngine() {
+        assertTrue(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.ZH_MLKIT, cachedModel = null))
+        assertTrue(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.ZH_MLKIT, cachedModel = OcrModel.LEGACY))
+        assertTrue(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.ZH_MLKIT, cachedModel = OcrModel.GLENS))
+        assertFalse(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.ZH_MLKIT, cachedModel = OcrModel.ZH_MLKIT))
+        assertFalse(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.LEGACY, cachedModel = null))
+        assertFalse(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.GLENS, cachedModel = null))
+        assertFalse(OcrOfflinePolicy.shouldDetectPageInReader(OcrModel.FAST, cachedModel = OcrModel.ZH_MLKIT))
+    }
+
+    @Test
     fun autoPrefersChineseOnlyForHanziWhileChineseEngineIsActive() {
         assertEquals(
             ParserLanguage.CHINESE,

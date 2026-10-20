@@ -14,6 +14,7 @@ import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.databinding.ReaderErrorBinding
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import eu.kanade.tachiyomi.ui.reader.viewer.ReaderChinesePageScanner
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderOcrPageIdentity
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderOcrRegionSelection
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
@@ -26,7 +27,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
+import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.repository.OcrRepository
+import mihon.domain.ocr.service.OcrPreferences
 import okio.Buffer
 import okio.BufferedSource
 import tachiyomi.core.common.i18n.stringResource
@@ -36,6 +39,8 @@ import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.i18n.MR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 /**
@@ -51,6 +56,14 @@ class WebtoonPageHolder(
 ) : WebtoonBaseHolder(frame, viewer) {
 
     private val ocrRepository: OcrRepository by injectLazy()
+    private val chinesePageScanner by lazy {
+        ReaderChinesePageScanner(
+            scope = scope,
+            ocrPreferences = Injekt.get<OcrPreferences>(),
+            ocrRepository = ocrRepository,
+            scanPageOcr = Injekt.get<ScanPageOcr>(),
+        )
+    }
 
     /**
      * Loading progress bar to indicate the current progress.
@@ -116,6 +129,7 @@ class WebtoonPageHolder(
     fun bind(page: ReaderPage) {
         this.page = page
         loadJob?.cancel()
+        chinesePageScanner.cancel()
         frame.setOcrPageIdentity(page.chapter.chapter.id, page.index)
         frame.setFileCropRect(null)
         frame.clearCachedOcrResult()
@@ -141,6 +155,7 @@ class WebtoonPageHolder(
     override fun recycle() {
         loadJob?.cancel()
         loadJob = null
+        chinesePageScanner.cancel()
 
         removeErrorLayout()
         frame.recycle()
@@ -190,6 +205,7 @@ class WebtoonPageHolder(
         progressIndicator.show()
         removeErrorLayout()
         frame.setFileCropRect(null)
+        chinesePageScanner.cancel()
         frame.clearCachedOcrResult()
     }
 
@@ -201,6 +217,7 @@ class WebtoonPageHolder(
         progressIndicator.show()
         removeErrorLayout()
         frame.setFileCropRect(null)
+        chinesePageScanner.cancel()
         frame.clearCachedOcrResult()
     }
 
@@ -212,6 +229,7 @@ class WebtoonPageHolder(
         progressIndicator.show()
         removeErrorLayout()
         frame.setFileCropRect(null)
+        chinesePageScanner.cancel()
         frame.clearCachedOcrResult()
     }
 
@@ -246,7 +264,17 @@ class WebtoonPageHolder(
                     ),
                 )
                 removeErrorLayout()
-                loadCachedOcrResult()
+                val currentPage = page
+                chinesePageScanner.onPageDisplayed(
+                    chapterId = currentPage?.chapter?.chapter?.id,
+                    pageIndex = currentPage?.index ?: 0,
+                    isAnimated = isAnimated,
+                    openStream = { source.peek().inputStream() },
+                    onResult = { result ->
+                        frame.setCachedOcrResult(result)
+                        viewer.activity.syncActiveOcrOverlay()
+                    },
+                )
             }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e)
@@ -289,6 +317,7 @@ class WebtoonPageHolder(
         progressContainer.isVisible = false
         initErrorLayout(error)
         frame.setFileCropRect(null)
+        chinesePageScanner.cancel()
         frame.clearCachedOcrResult()
     }
 
@@ -298,18 +327,6 @@ class WebtoonPageHolder(
     private fun onImageDecoded() {
         progressContainer.isVisible = false
         removeErrorLayout()
-    }
-
-    private fun loadCachedOcrResult() {
-        val currentPage = page ?: return frame.clearCachedOcrResult()
-        val chapterId = currentPage.chapter.chapter.id ?: return frame.clearCachedOcrResult()
-        scope.launchIO {
-            val cachedResult = ocrRepository.getCachedPage(chapterId, currentPage.index)
-            withUIContext {
-                frame.setCachedOcrResult(cachedResult)
-                viewer.activity.syncActiveOcrOverlay()
-            }
-        }
     }
 
     /**
