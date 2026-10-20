@@ -139,6 +139,7 @@ fun OcrResultPopup(
                             onQueryChange = onQueryChange,
                             onSearch = onSearch,
                             onCopyText = null,
+                            sentence = searchState.results?.sentence,
                             contentPadding = PaddingValues(8.dp),
                         )
                     }

@@ -44,6 +44,8 @@ dependencies {
     // Bundled Chinese model (in the APK). Do not switch this to
     // play-services-mlkit-text-recognition-chinese: that variant downloads the model.
     implementation(libs.mlkit.text.recognition.chinese)
+    // Language packs are not in the APK. Settings downloads zh and en once.
+    implementation(libs.mlkit.translate)
 
     implementation(libs.anki.android)
     implementation(libs.hoshidicts)

@@ -27,6 +27,7 @@ fun OcrResultOverlay(
     dimBackground: Boolean,
     queryText: String,
     initialSearchText: String = queryText,
+    chineseSentence: Boolean = false,
     anchorRect: RectF?,
     onCopyText: () -> Unit,
     searchState: DictionarySearchScreenModel.State,
@@ -36,10 +37,10 @@ fun OcrResultOverlay(
     onPlayAudioClick: (List<DictionaryTerm>) -> Unit,
 ) {
     BackHandler(onBack = onDismissRequest)
-    LaunchedEffect(queryText, initialSearchText) {
+    LaunchedEffect(queryText, initialSearchText, chineseSentence) {
         if (queryText.isNotBlank()) {
             onQueryChange(queryText)
-            onSearch(initialSearchText)
+            onSearch(if (chineseSentence) queryText else initialSearchText)
         }
     }
 

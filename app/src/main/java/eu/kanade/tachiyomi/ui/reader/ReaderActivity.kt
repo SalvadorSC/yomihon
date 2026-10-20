@@ -119,6 +119,8 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.domain.dictionary.model.DictionaryTerm
+import mihon.domain.ocr.model.prefersChineseScript
+import mihon.domain.ocr.service.OcrPreferences
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
@@ -517,6 +519,7 @@ class ReaderActivity : BaseActivity() {
                         },
                     )
                 }
+                val chineseOcr = Injekt.get<OcrPreferences>().ocrModel().get().prefersChineseScript
                 OcrResultOverlay(
                     onDismissRequest = onDismissOcrResult,
                     presentation = when (dialog.origin) {
@@ -531,6 +534,7 @@ class ReaderActivity : BaseActivity() {
                     dimBackground = dimOcrBackground,
                     queryText = dialog.queryText,
                     initialSearchText = dialog.initialSearchText,
+                    chineseSentence = chineseOcr,
                     anchorRect = activeOcrOverlaySession?.anchorRectInDialogRoot,
                     onCopyText = {
                         val clipboard = getSystemService<ClipboardManager>()
@@ -541,7 +545,13 @@ class ReaderActivity : BaseActivity() {
                     },
                     searchState = searchState,
                     onQueryChange = dictionarySearchScreenModel::updateQuery,
-                    onSearch = dictionarySearchScreenModel::search,
+                    onSearch = { text ->
+                        if (chineseOcr) {
+                            dictionarySearchScreenModel.searchChineseSentence(text)
+                        } else {
+                            dictionarySearchScreenModel.search(text)
+                        }
+                    },
                     onTermGroupClick = { terms ->
                         lifecycleScope.launchIO {
                             if (

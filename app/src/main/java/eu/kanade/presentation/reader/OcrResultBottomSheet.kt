@@ -85,6 +85,7 @@ fun OcrResultBottomSheet(
                     onQueryChange = onQueryChange,
                     onSearch = onSearch,
                     onCopyText = onCopyText,
+                    sentence = searchState.results?.sentence,
                     contentPadding = PaddingValues(bottom = 8.dp),
                 )
             }

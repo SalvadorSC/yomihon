@@ -64,6 +64,7 @@ import mihon.domain.dictionary.model.Dictionary
 import mihon.domain.dictionary.model.DictionaryTerm
 import mihon.domain.dictionary.model.DictionaryTermMeta
 import mihon.domain.dictionary.model.extractAttributionText
+import mihon.domain.dictionary.zh.ChineseSentenceGuide
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -113,6 +114,7 @@ fun DictionaryResults(
     onSearch: (String) -> Unit,
     onCopyText: (() -> Unit)? = null,
     onOpenDictionarySettings: (() -> Unit)? = null,
+    sentence: ChineseSentenceGuide? = null,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
     when {
@@ -120,19 +122,31 @@ fun DictionaryResults(
             LoadingScreen(modifier.fillMaxSize())
         }
         dictionaries.isEmpty() || enabledDictionaryIds.isEmpty() -> {
-            if (onOpenDictionarySettings != null) {
-                NoDictionariesEnabledMessage(onOpenDictionarySettings = onOpenDictionarySettings)
-            } else {
-                Box(
-                    modifier = modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(MR.strings.no_dictionaries_enabled),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
+            Column(modifier = modifier.fillMaxSize()) {
+                if (sentence != null) {
+                    ChineseSentenceHeader(
+                        sentence = sentence,
+                        modifier = Modifier.padding(contentPadding),
                     )
+                }
+                if (onOpenDictionarySettings != null) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        NoDictionariesEnabledMessage(onOpenDictionarySettings = onOpenDictionarySettings)
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(MR.strings.no_dictionaries_enabled),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }
@@ -148,6 +162,12 @@ fun DictionaryResults(
             Column(
                 modifier = modifier.fillMaxSize(),
             ) {
+                if (sentence != null) {
+                    ChineseSentenceHeader(
+                        sentence = sentence,
+                        modifier = Modifier.padding(contentPadding),
+                    )
+                }
                 if (showQueryHeader && query.isNotBlank()) {
                     WordSelector(
                         text = query,
@@ -178,6 +198,7 @@ fun DictionaryResults(
                 query = query,
                 highlightRange = highlightRange,
                 showQueryHeader = showQueryHeader,
+                sentence = sentence,
                 contentPadding = contentPadding,
                 modifier = modifier,
             )
@@ -186,6 +207,37 @@ fun DictionaryResults(
             EmptyScreen(
                 stringRes = MR.strings.information_empty_dictionary_search,
                 modifier = modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+fun ChineseSentenceHeader(
+    sentence: ChineseSentenceGuide,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = sentence.text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        if (sentence.pinyin.isNotBlank()) {
+            Text(
+                text = sentence.pinyin,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        val translation = sentence.translation
+        if (!translation.isNullOrBlank()) {
+            Text(
+                text = translation,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
     }
@@ -227,6 +279,7 @@ private fun SearchResultsList(
     query: String,
     highlightRange: Pair<Int, Int>?,
     showQueryHeader: Boolean,
+    sentence: ChineseSentenceGuide?,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
@@ -248,6 +301,12 @@ private fun SearchResultsList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier,
     ) {
+        if (sentence != null) {
+            item(key = "chinese-sentence") {
+                ChineseSentenceHeader(sentence = sentence)
+            }
+        }
+
         if (showQueryHeader && query.isNotBlank()) {
             item {
                 WordSelector(
