@@ -56,6 +56,7 @@ litert = "2.2.0"
 logcat = "0.4"
 markdown = "0.43.0"
 material = "1.12.0"
+mlkit-text-recognition-chinese = "16.0.1"
 materialKolor = "5.0.0-alpha07"
 mockk = "1.14.11"
 moko-resources = "0.26.4"
@@ -161,6 +162,7 @@ logcat = { module = "com.squareup.logcat:logcat", version.ref = "logcat" }
 litert = { module = "com.google.ai.edge.litert:litert", version.ref = "litert" }
 markdown-coil = { module = "com.mikepenz:multiplatform-markdown-renderer-coil3", version.ref = "markdown" }
 markdown-core = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown" }
+mlkit-text-recognition-chinese = { module = "com.google.mlkit:text-recognition-chinese", version.ref = "mlkit-text-recognition-chinese" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
 materialKolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }

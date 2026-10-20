@@ -29,7 +29,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Dependency Review
-        if: github.event_name == 'pull_request'
+        # The action needs the repository dependency graph. Forks that leave it off
+        # fail the job before tests or the APK are produced.
+        if: github.event_name == 'pull_request' && github.repository == 'yomihon/yomihon'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
       - name: Set up JDK
@@ -78,7 +80,7 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest
 
       - name: Build app
-        run: ./gradlew assembleRelease -Pinclude-telemetry -Penable-updater
+        run: ./gradlew assembleRelease -Penable-updater
 
       - name: Upload APK (arm64)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -1,5 +1,9 @@
 # Model Attribution
 
+## Chinese text recognition
+
+**Chinese (offline)** uses Google ML Kit Text Recognition v2 for Chinese, artifact `com.google.mlkit:text-recognition-chinese` (bundled model, not the Play Services download). The model is closed source and is packaged inside the APK. It is not fetched at runtime.
+
 This repository includes support for an experimental manga panel detection model that is fetched separately during local setup and release packaging.
 
 ## Panel Detection Model

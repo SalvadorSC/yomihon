@@ -296,7 +296,9 @@ class DomainModule : InjektModule {
         addSingletonFactory { OcrPageSourceResolver(get(), get(), get()) }
         addSingletonFactory { ReaderSelectionCropper(get()) }
         addSingletonFactory { OcrScanNotifier(get<Application>()) }
-        addSingletonFactory { OcrChapterScanner(get<Application>(), get(), get(), get(), get(), get(), get(), get()) }
+        addSingletonFactory {
+            OcrChapterScanner(get<Application>(), get(), get(), get(), get(), get(), get(), get(), get())
+        }
         addSingletonFactory { OcrScanManager(get<Application>(), get(), get(), get()) }
         addFactory { OcrQueueActions(get(), get()) }
         addFactory { OcrProcessor(get()) }

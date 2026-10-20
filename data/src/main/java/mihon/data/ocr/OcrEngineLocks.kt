@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.withLock
 internal class OcrEngineLocks {
     private val legacyMutex = Mutex()
     private val fastMutex = Mutex()
+    private val zhMlkitMutex = Mutex()
     private val glensMutex = Mutex()
     private val owOcrMutex = Mutex()
     private val detectionMutex = Mutex()
@@ -28,10 +29,12 @@ internal class OcrEngineLocks {
     suspend fun <T> withAllLocks(block: suspend () -> T): T {
         return legacyMutex.withLock {
             fastMutex.withLock {
-                glensMutex.withLock {
-                    owOcrMutex.withLock {
-                        detectionMutex.withLock {
-                            block()
+                zhMlkitMutex.withLock {
+                    glensMutex.withLock {
+                        owOcrMutex.withLock {
+                            detectionMutex.withLock {
+                                block()
+                            }
                         }
                     }
                 }
@@ -43,6 +46,7 @@ internal class OcrEngineLocks {
         return when (type) {
             OcrRepositoryImpl.EngineType.LEGACY -> legacyMutex
             OcrRepositoryImpl.EngineType.FAST -> fastMutex
+            OcrRepositoryImpl.EngineType.ZH_MLKIT -> zhMlkitMutex
             OcrRepositoryImpl.EngineType.GLENS -> glensMutex
             OcrRepositoryImpl.EngineType.OWOCR -> owOcrMutex
         }

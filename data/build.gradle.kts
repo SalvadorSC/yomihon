@@ -41,6 +41,9 @@ dependencies {
 
     implementation(libs.androidx.sqlite.bundled)
     implementation(libs.litert)
+    // Bundled Chinese model (in the APK). Do not switch this to
+    // play-services-mlkit-text-recognition-chinese: that variant downloads the model.
+    implementation(libs.mlkit.text.recognition.chinese)
 
     implementation(libs.anki.android)
     implementation(libs.hoshidicts)

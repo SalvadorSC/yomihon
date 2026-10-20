@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,7 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.databinding.DownloadListBinding
 import kotlinx.collections.immutable.toPersistentList
 import mihon.domain.ocr.model.OcrModel
+import mihon.domain.ocr.model.requiresNetwork
 import mihon.domain.ocr.service.OcrPreferences
 import mihon.feature.ocr.titleRes
 import tachiyomi.i18n.MR
@@ -86,6 +88,19 @@ object OcrQueueScreen : Screen() {
         val useFallbackModels by useFallbackModelsPreference
             .changes()
             .collectAsState(initial = useFallbackModelsPreference.get())
+        val strictOfflinePreference = remember { ocrPreferences.strictOffline() }
+        val strictOffline by strictOfflinePreference
+            .changes()
+            .collectAsState(initial = strictOfflinePreference.get())
+
+        LaunchedEffect(strictOffline, ocrModel) {
+            if (strictOffline && ocrModel.requiresNetwork) {
+                ocrModelPreference.set(OcrModel.LEGACY)
+            }
+        }
+        val selectableModels = OcrModel.entries.filter { model ->
+            !strictOffline || !model.requiresNetwork
+        }
 
         val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
         var fabExpanded by remember { mutableStateOf(true) }
@@ -193,14 +208,14 @@ object OcrQueueScreen : Screen() {
                     title = stringResource(MR.strings.pref_ocr_model),
                     subtitle = stringResource(ocrModel.titleRes),
                     icon = null,
-                    entries = mapOf(
-                        OcrModel.LEGACY to stringResource(OcrModel.LEGACY.titleRes),
-                        OcrModel.FAST to stringResource(OcrModel.FAST.titleRes),
-                        OcrModel.GLENS to stringResource(OcrModel.GLENS.titleRes),
-                        OcrModel.OWOCR to stringResource(OcrModel.OWOCR.titleRes),
-                    ),
+                    entries = selectableModels.associateWith { model ->
+                        stringResource(model.titleRes)
+                    },
                     onValueChange = ocrModelPreference::set,
                 )
+                if (ocrModel == OcrModel.ZH_MLKIT) {
+                    InfoWidget(text = stringResource(MR.strings.pref_ocr_zh_offline_note))
+                }
                 if (ocrModel == OcrModel.OWOCR) {
                     EditTextPreferenceWidget(
                         title = stringResource(MR.strings.pref_owocr_address),
@@ -218,6 +233,12 @@ object OcrQueueScreen : Screen() {
                     checked = autoOcrOnDownload,
                     title = stringResource(MR.strings.pref_auto_ocr_on_download),
                     onCheckedChanged = autoOcrOnDownloadPreference::set,
+                )
+                SwitchPreferenceWidget(
+                    checked = strictOffline,
+                    title = stringResource(MR.strings.pref_ocr_strict_offline),
+                    subtitle = stringResource(MR.strings.pref_ocr_strict_offline_summary),
+                    onCheckedChanged = strictOfflinePreference::set,
                 )
                 SwitchPreferenceWidget(
                     checked = useFallbackModels,

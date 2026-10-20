@@ -449,8 +449,12 @@
     <string name="pref_ocr_model">Text recognition model</string>
     <string name="ocr_model_legacy">Legacy</string>
     <string name="ocr_model_fast">Fast (Experimental)</string>
+    <string name="ocr_model_zh_mlkit">Chinese (offline)</string>
     <string name="ocr_model_glens">Online</string>
     <string name="ocr_model_owocr">OwOCR (Self-hosted)</string>
+    <string name="pref_ocr_strict_offline">Strict offline</string>
+    <string name="pref_ocr_strict_offline_summary">Keep text recognition on the device. Google Lens and OwOCR stay hidden, and page images are never uploaded.</string>
+    <string name="pref_ocr_zh_offline_note">Chinese (offline) runs on the device. It does not fall back to online text recognition.</string>
     <string name="pref_owocr_address">OwOCR Server Address</string>
     <string name="pref_owocr_address_summary">WebSocket URL of your self-hosted OwOCR instance</string>
     <string name="pref_owocr_address_note">You will need to configure your host's IP and make sure OwOCR is running with \"owocr -r websocket -w websocket\" or via the installer package, with read and write to websocket. Set the output format to JSON and use a proper model to process full pages with OwOCR.</string>
