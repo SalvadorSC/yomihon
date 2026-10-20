@@ -69,11 +69,21 @@ Build an arm64 release without Firebase. Do not pass `-Pinclude-telemetry`.
 ```sh
 # Japanese manga-ocr weights are still required for the Legacy and Fast engines.
 # Chinese recognition does not use those files. See CONTRIBUTING.md for the file names and checksums.
-./gradlew assembleRelease
+cat > keystore.properties << 'EOF'
+storeFile=../signing/zh-fork-release.jks
+storePassword=android
+keyAlias=zh-fork
+keyPassword=android
+EOF
+./gradlew assembleRelease -PabiSplits=arm64-v8a
 adb install -r app/build/outputs/apk/release/app-arm64-v8a-release.apk
 ```
 
-The release signing config falls back to the debug keystore when `keystore.properties` is absent, so the APK can be installed for personal use.
+`keystore.properties` is gitignored. With those four lines, release builds are signed with the keystore committed at `signing/zh-fork-release.jks`. The store password, key password, and alias are the public debug-style values above (`android` / `android` / `zh-fork`). GitHub Actions secrets could not be set from this environment, so the key lives in the repo instead of `SIGNING_KEY`. The certificate SHA-256 is `87:24:F7:B6:0C:AD:08:1E:BF:46:F5:0E:0F:ED:D9:A6:78:70:0F:25:87:74:32:BD:E6:7C:C2:51:F7:1A:CB:E4`.
+
+A pushed tag `zh-v0.4.3-N` runs `.github/workflows/zh-release.yml`, which writes the same `keystore.properties`, builds only arm64, and publishes `yomihon-arm64-v8a.apk` on a GitHub Release. `versionCode` is `2800 + N` and `versionName` is `0.4.3-zh.N`, so a later tag installs over an earlier one. It does not install over upstream Yomihon or over an APK signed with a machine debug key; uninstall that copy once.
+
+Without `keystore.properties`, Gradle still falls back to the machine debug keystore. Those APKs will not update the release builds.
 
 ### Staying in sync with upstream
 

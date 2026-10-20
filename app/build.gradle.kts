@@ -32,8 +32,8 @@ android {
     defaultConfig {
         applicationId = "app.yomihon"
 
-        versionCode = 28
-        versionName = "0.4.3"
+        versionCode = (findProperty("forkVersionCode") as String?)?.toIntOrNull() ?: 28
+        versionName = (findProperty("forkVersionName") as String?) ?: "0.4.3"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getLatestCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getLatestCommitSha()}\"")
@@ -125,12 +125,18 @@ android {
         getByName("benchmark").res.directories.add("src/debug/res")
     }
 
+    val abiSplits = (findProperty("abiSplits") as String?)
+        ?.split(',')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+
     splits {
         abi {
             isEnable = true
-            isUniversalApk = true
+            isUniversalApk = abiSplits.size > 1
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include(*abiSplits.toTypedArray())
         }
     }
 
