@@ -28,6 +28,7 @@ internal data class ChineseTextBlock(
  *
  * ML Kit often returns one block per line. Stacked lines of the same bubble, and
  * fragments sitting side by side, are joined. Blocks that are far apart stay separate.
+ * Site credits and other corner watermarks are dropped, so they are not outlined.
  * The merged text is ordered for manhua: horizontal bubbles top-to-bottom then
  * left-to-right, and a page that is mostly vertical columns right-to-left.
  */
@@ -59,34 +60,39 @@ internal object ChineseBubbleGrouper {
             .values
             .map { indexes -> merge(indexes.map { usable[it] }) }
 
-        val verticalPage = groups.count { ChineseOcrLayout.isVertical(it.lines) } * 2 >= groups.size
-        val ordered = if (verticalPage) {
-            groups.sortedWith(
-                compareByDescending<MergedBubble> { (it.left + it.right) / 2f }
-                    .thenBy { it.top },
-            )
-        } else {
-            groups.sortedWith(
-                compareBy<MergedBubble> { it.top }
-                    .thenBy { it.left },
-            )
-        }
-
-        return ordered.mapIndexedNotNull { index, bubble ->
+        val bubbles = groups.mapNotNull { bubble ->
             val text = ChineseTextPostprocessor.postprocess(ChineseOcrLayout.assemble(bubble.lines))
-            if (text.isBlank()) return@mapIndexedNotNull null
+            if (text.isBlank()) return@mapNotNull null
             val box = OcrBoundingBox(
                 left = (bubble.left / imageWidth).coerceIn(0f, 1f),
                 top = (bubble.top / imageHeight).coerceIn(0f, 1f),
                 right = (bubble.right / imageWidth).coerceIn(0f, 1f),
                 bottom = (bubble.bottom / imageHeight).coerceIn(0f, 1f),
             )
-            if (!box.isValid()) return@mapIndexedNotNull null
+            if (!box.isValid() || ChineseWatermark.isSiteCredit(text, box)) return@mapNotNull null
+            PreparedBubble(bubble, text, box)
+        }
+        if (bubbles.isEmpty()) return emptyList()
+
+        val verticalPage = bubbles.count { ChineseOcrLayout.isVertical(it.source.lines) } * 2 >= bubbles.size
+        val ordered = if (verticalPage) {
+            bubbles.sortedWith(
+                compareByDescending<PreparedBubble> { (it.source.left + it.source.right) / 2f }
+                    .thenBy { it.source.top },
+            )
+        } else {
+            bubbles.sortedWith(
+                compareBy<PreparedBubble> { it.source.top }
+                    .thenBy { it.source.left },
+            )
+        }
+
+        return ordered.mapIndexed { index, bubble ->
             OcrRegion(
                 order = index,
-                text = text,
-                boundingBox = box,
-                textOrientation = if (ChineseOcrLayout.isVertical(bubble.lines)) {
+                text = bubble.text,
+                boundingBox = bubble.box,
+                textOrientation = if (ChineseOcrLayout.isVertical(bubble.source.lines)) {
                     OcrTextOrientation.Vertical
                 } else {
                     OcrTextOrientation.Horizontal
@@ -127,6 +133,12 @@ internal object ChineseBubbleGrouper {
         val top: Float,
         val right: Float,
         val bottom: Float,
+    )
+
+    private data class PreparedBubble(
+        val source: MergedBubble,
+        val text: String,
+        val box: OcrBoundingBox,
     )
 
     private class UnionFind(size: Int) {
