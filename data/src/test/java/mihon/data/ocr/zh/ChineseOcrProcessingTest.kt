@@ -97,6 +97,97 @@ class ChineseOcrProcessingTest {
         assertTrue(regions[0].boundingBox.left > regions[1].boundingBox.left)
     }
 
+    @Test
+    fun dropsManhuarenAndDm5WatermarksFromTheTestPages() {
+        val regions = ChineseBubbleGrouper.group(
+            blocks = listOf(
+                block("妖灵师和武者都有五个等级", left = 218f, top = 31f, right = 364f, bottom = 216f),
+                block("烈焰妖狐", left = 56f, top = 425f, right = 183f, bottom = 457f),
+                block("manhuaren.com", left = 658f, top = 1100f, right = 790f, bottom = 1118f),
+                block("manhuarencom", left = 650f, top = 1096f, right = 792f, bottom = 1120f),
+                block("DM5", left = 710f, top = 8f, right = 778f, bottom = 36f),
+                block("dm5.com", left = 16f, top = 1088f, right = 140f, bottom = 1116f),
+            ),
+            imageWidth = 800,
+            imageHeight = 1131,
+        )
+
+        assertEquals(
+            listOf("妖灵师和武者都有五个等级", "烈焰妖狐"),
+            regions.map { it.text },
+        )
+        assertEquals(listOf(0, 1), regions.map { it.order })
+    }
+
+    @Test
+    fun dropsOtherSiteCreditsAndCornerLatin() {
+        val regions = ChineseBubbleGrouper.group(
+            blocks = listOf(
+                block("圣祖山脉之外的世界", left = 40f, top = 180f, right = 520f, bottom = 240f),
+                block("www.kuaikanmanhua.com", left = 180f, top = 400f, right = 620f, bottom = 448f),
+                block("www.", left = 640f, top = 16f, right = 760f, bottom = 48f),
+                block("example.net", left = 24f, top = 980f, right = 200f, bottom = 1016f),
+                block("example.cn", left = 280f, top = 980f, right = 440f, bottom = 1016f),
+                block("mantuarencom", left = 658f, top = 1096f, right = 791f, bottom = 1120f),
+            ),
+            imageWidth = 800,
+            imageHeight = 1131,
+        )
+
+        assertEquals(listOf("圣祖山脉之外的世界"), regions.map { it.text })
+    }
+
+    @Test
+    fun keepsChineseBubblesThatContainOccasionalLatin() {
+        val regions = ChineseBubbleGrouper.group(
+            blocks = listOf(
+                block("Hello 世界", left = 100f, top = 100f, right = 360f, bottom = 160f),
+                block("A1，你好！", left = 100f, top = 220f, right = 360f, bottom = 280f),
+                block("OK，出发", left = 120f, top = 340f, right = 320f, bottom = 400f),
+                block("BOSS", left = 330f, top = 480f, right = 450f, bottom = 540f),
+                block("今天去 www.kuaikanmanhua.com 看", left = 40f, top = 700f, right = 740f, bottom = 760f),
+                block("DM5很强", left = 160f, top = 860f, right = 360f, bottom = 920f),
+            ),
+            imageWidth = 800,
+            imageHeight = 1131,
+        )
+
+        assertEquals(
+            listOf(
+                "Hello 世界",
+                "A1，你好！",
+                "OK，出发",
+                "BOSS",
+                "今天去 www.kuaikanmanhua.com 看",
+                "DM5很强",
+            ),
+            regions.map { it.text },
+        )
+    }
+
+    @Test
+    fun cornerCreditDoesNotChangeAVerticalColumn() {
+        val regions = ChineseBubbleGrouper.group(
+            blocks = listOf(
+                block(
+                    "繁華環璇的大都會",
+                    left = 635f,
+                    top = 250f,
+                    right = 675f,
+                    bottom = 820f,
+                    angleDegrees = 90f,
+                ),
+                block("manhuaren.com", left = 658f, top = 1100f, right = 790f, bottom = 1118f),
+                block("DM5", left = 20f, top = 12f, right = 90f, bottom = 40f),
+            ),
+            imageWidth = 800,
+            imageHeight = 1131,
+        )
+
+        assertEquals(listOf("繁華環璇的大都會"), regions.map { it.text })
+        assertEquals(OcrTextOrientation.Vertical, regions[0].textOrientation)
+    }
+
     private fun block(
         text: String,
         left: Float,
