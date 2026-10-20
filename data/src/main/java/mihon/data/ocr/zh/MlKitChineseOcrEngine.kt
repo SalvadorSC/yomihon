@@ -8,13 +8,14 @@ import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import mihon.data.ocr.OcrEngine
-import mihon.domain.ocr.model.OcrBoundingBox
 import mihon.domain.ocr.model.OcrRegion
-import mihon.domain.ocr.model.OcrTextOrientation
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Simplified Chinese OCR backed by the bundled ML Kit Chinese model.
@@ -24,57 +25,40 @@ import kotlin.math.max
  */
 internal class MlKitChineseOcrEngine : OcrEngine {
     private val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+    private val processMutex = Mutex()
 
     override suspend fun recognizeText(image: Bitmap): String {
-        val (working, recycleWorking) = prepareImage(image)
-        return try {
-            val result = recognizer.process(InputImage.fromBitmap(working, 0)).awaitTask()
-            val lines = result.textBlocks.flatMap { block -> block.toLines() }
-            ChineseTextPostprocessor.postprocess(ChineseOcrLayout.assemble(lines))
-        } finally {
-            if (recycleWorking && !working.isRecycled) {
-                working.recycle()
+        return processMutex.withLock {
+            val (working, recycleWorking) = prepareImage(image)
+            try {
+                val result = recognizer.process(InputImage.fromBitmap(working, 0)).awaitTask()
+                val lines = result.textBlocks.flatMap { block -> block.toLines() }
+                ChineseTextPostprocessor.postprocess(ChineseOcrLayout.assemble(lines))
+            } finally {
+                if (recycleWorking && !working.isRecycled) {
+                    working.recycle()
+                }
             }
         }
     }
 
     /**
-     * Full-page result used by chapter OCR. ML Kit's own blocks become regions, so this
-     * path does not need the Japanese text detector and does not upload the image.
+     * One on-device pass. ML Kit Chinese text blocks are merged into bubbles.
+     * The image is not uploaded.
      */
     suspend fun recognizePage(image: Bitmap): List<OcrRegion> {
-        val (working, recycleWorking) = prepareImage(image)
-        return try {
-            val result = recognizer.process(InputImage.fromBitmap(working, 0)).awaitTask()
-            val width = working.width.coerceAtLeast(1)
-            val height = working.height.coerceAtLeast(1)
-            result.textBlocks.mapIndexedNotNull { index, block ->
-                val lines = block.toLines()
-                val text = ChineseTextPostprocessor.postprocess(ChineseOcrLayout.assemble(lines))
-                if (text.isBlank()) {
-                    return@mapIndexedNotNull null
+        return processMutex.withLock {
+            val (working, recycleWorking) = prepareImage(image)
+            try {
+                val result = recognizer.process(InputImage.fromBitmap(working, 0)).awaitTask()
+                val width = working.width.coerceAtLeast(1)
+                val height = working.height.coerceAtLeast(1)
+                val blocks = result.textBlocks.mapNotNull { block -> block.toTextBlock() }
+                ChineseBubbleGrouper.group(blocks, width, height)
+            } finally {
+                if (recycleWorking && !working.isRecycled) {
+                    working.recycle()
                 }
-                val bounds = block.boundingBox
-                    ?: return@mapIndexedNotNull null
-                OcrRegion(
-                    order = index,
-                    text = text,
-                    boundingBox = OcrBoundingBox(
-                        left = bounds.left / width.toFloat(),
-                        top = bounds.top / height.toFloat(),
-                        right = bounds.right / width.toFloat(),
-                        bottom = bounds.bottom / height.toFloat(),
-                    ),
-                    textOrientation = if (ChineseOcrLayout.isVertical(lines)) {
-                        OcrTextOrientation.Vertical
-                    } else {
-                        OcrTextOrientation.Horizontal
-                    },
-                )
-            }
-        } finally {
-            if (recycleWorking && !working.isRecycled) {
-                working.recycle()
             }
         }
     }
@@ -104,6 +88,23 @@ internal class MlKitChineseOcrEngine : OcrEngine {
             software.recycle()
         }
         return scaled to true
+    }
+
+    private fun Text.TextBlock.toTextBlock(): ChineseTextBlock? {
+        val lines = toLines().filter { it.text.isNotBlank() }
+        if (lines.isEmpty()) return null
+        val bounds = boundingBox
+        val left = min(bounds?.left?.toFloat() ?: lines.minOf { it.left }, lines.minOf { it.left })
+        val top = min(bounds?.top?.toFloat() ?: lines.minOf { it.top }, lines.minOf { it.top })
+        val right = max(bounds?.right?.toFloat() ?: lines.maxOf { it.right }, lines.maxOf { it.right })
+        val bottom = max(bounds?.bottom?.toFloat() ?: lines.maxOf { it.bottom }, lines.maxOf { it.bottom })
+        return ChineseTextBlock(
+            lines = lines,
+            left = left,
+            top = top,
+            right = right,
+            bottom = bottom,
+        )
     }
 
     private fun Text.TextBlock.toLines(): List<ChineseOcrLine> {

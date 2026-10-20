@@ -62,7 +62,9 @@ This fork can recognize Simplified Chinese on the phone. The model is bundled in
 3. Set **Text recognition model** to **Chinese (offline)**.
 4. Leave **Strict offline** on. Google Lens and OwOCR are hidden, and images are not sent to them even when **Use fallback models** is on.
 5. Import the Yomitan [CC-CEDICT](https://github.com/MarvNC/cc-cedict-yomitan) dictionary (`CC-CEDICT.zip`). With **Chinese (offline)** selected, **Settings → Advanced → Parser language = Auto** treats pure hanzi as Chinese. You can also set the parser to **Chinese**. Kana still uses the Japanese parser.
-6. Read in **webtoon** mode (long-strip). Long-press a bubble and drag a box around the text. A box that crosses a split between two strips is stitched back together before recognition. Turn on **Activate OCR on long tap** in the reader settings if a long-press opens the page menu instead.
+6. Read in **webtoon** mode (long-strip) or paged mode. Long-press a bubble and drag a box around the text. A box that crosses a split between two strips is stitched back together before recognition. Turn on **Activate OCR on long tap** in the reader settings if a long-press opens the page menu instead.
+
+With **Chinese (offline)** selected, each page is scanned on the phone as it loads, and a downloaded chapter is scanned too. Bubbles are outlined. Tap one to open the same result as a box selection. A tap that misses text still turns the page or opens the menu. Detection uses ML Kit Chinese text blocks grouped on the device. It does not use the panel detector.
 
 Build an arm64 release without Firebase. Do not pass `-Pinclude-telemetry`.
 

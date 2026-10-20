@@ -51,6 +51,7 @@ import eu.kanade.tachiyomi.util.system.animatorDurationScale
 import eu.kanade.tachiyomi.util.view.isVisibleOnScreen
 import logcat.LogPriority
 import mihon.domain.ocr.model.OcrBoundingBox
+import mihon.domain.ocr.model.OcrModel
 import mihon.domain.ocr.model.OcrPageResult
 import mihon.domain.ocr.model.flattenOcrTextForQuery
 import mihon.domain.ocr.model.normalizeOcrTextForDisplay
@@ -111,6 +112,12 @@ open class ReaderPageImageView @JvmOverloads constructor(
             style = Paint.Style.STROKE
             strokeWidth = resources.displayMetrics.density * 1.5f
         }
+    private val ocrRegionOutlinePaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(150, 255, 255, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = resources.displayMetrics.density * 1.25f
+        }
     private val ocrOverlayTextPaint =
         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
@@ -149,6 +156,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
     open fun onImageLoaded() {
         onImageLoaded?.invoke()
         background = pageBackground
+        invalidate()
     }
 
     @CallSuper
@@ -529,6 +537,7 @@ open class ReaderPageImageView @JvmOverloads constructor(
                     override fun onScaleChanged(newScale: Float, origin: Int) {
                         this@ReaderPageImageView.onScaleChanged(newScale)
                         panelDebugOverlay.invalidate()
+                        invalidate()
                     }
 
                     override fun onCenterChanged(newCenter: PointF?, origin: Int) {
@@ -724,8 +733,8 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     fun tryConsumeOcrTapLocal(localX: Float, localY: Float): Boolean {
         val result = cachedOcrResult ?: return false
-        val sourcePoint = localPointToFilePoint(localX, localY) ?: return false
-        val region = result.findRegionAt(sourcePoint.x, sourcePoint.y) ?: return false
+        val normalized = localPointToNormalizedPoint(localX, localY, result) ?: return false
+        val region = result.findRegionAtNormalized(normalized.x, normalized.y) ?: return false
 
         val displayText = normalizeOcrTextForDisplay(region.text)
 
@@ -760,7 +769,17 @@ open class ReaderPageImageView @JvmOverloads constructor(
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
+        drawCachedChineseOutlines(canvas)
         drawActiveOcrOverlay(canvas)
+    }
+
+    private fun drawCachedChineseOutlines(canvas: Canvas) {
+        val result = cachedOcrResult ?: return
+        if (result.ocrModel != OcrModel.ZH_MLKIT) return
+        for (region in result.regions) {
+            val rect = boundingBoxToDisplayedRect(region.boundingBox, result) ?: continue
+            canvas.drawRect(rect, ocrRegionOutlinePaint)
+        }
     }
 
     private fun drawActiveOcrOverlay(canvas: Canvas) {
@@ -894,11 +913,44 @@ open class ReaderPageImageView @JvmOverloads constructor(
         }
     }
 
-    private fun localPointToFilePoint(localX: Float, localY: Float): PointF? {
+    /**
+     * Tap position as fractions of the image currently on screen.
+     * A webtoon strip is often a view-sized bitmap, so file pixels from a full-page
+     * scan are not comparable until both sides are normalized.
+     */
+    private fun localPointToNormalizedPoint(
+        localX: Float,
+        localY: Float,
+        pageResult: OcrPageResult,
+    ): PointF? {
         return when (val currentPageView = pageView) {
-            is SubsamplingScaleImageView -> currentPageView.viewToFilePoint(localX, localY, fileCropRect)
-            else -> localPointToSourcePoint(localX, localY)
+            is SubsamplingScaleImageView -> {
+                if (!currentPageView.isReady) return null
+                val filePoint = currentPageView.viewToFilePoint(localX, localY, fileCropRect) ?: return null
+                val (spaceWidth, spaceHeight) = ocrHitSpace(currentPageView, pageResult) ?: return null
+                PointF(filePoint.x / spaceWidth, filePoint.y / spaceHeight)
+            }
+            is ImageView -> {
+                val sourcePoint = localPointToSourcePoint(localX, localY) ?: return null
+                val drawable = currentPageView.drawable ?: return null
+                val width = drawable.intrinsicWidth.toFloat()
+                val height = drawable.intrinsicHeight.toFloat()
+                if (width <= 0f || height <= 0f) return null
+                PointF(sourcePoint.x / width, sourcePoint.y / height)
+            }
+            else -> null
         }
+    }
+
+    private fun ocrHitSpace(
+        view: SubsamplingScaleImageView,
+        pageResult: OcrPageResult,
+    ): Pair<Float, Float>? {
+        if (fileCropRect != null && pageResult.imageWidth > 0 && pageResult.imageHeight > 0) {
+            return pageResult.imageWidth.toFloat() to pageResult.imageHeight.toFloat()
+        }
+        if (view.sWidth <= 0 || view.sHeight <= 0) return null
+        return view.sWidth.toFloat() to view.sHeight.toFloat()
     }
 
     private fun boundingBoxToScreenRect(
@@ -916,10 +968,16 @@ open class ReaderPageImageView @JvmOverloads constructor(
         pageResult: OcrPageResult,
     ): RectF? {
         return when (val currentPageView = pageView) {
-            is SubsamplingScaleImageView -> currentPageView.fileToViewRect(
-                boundingBox.toSourceRect(pageResult),
-                fileCropRect,
-            )
+            is SubsamplingScaleImageView -> {
+                val (spaceWidth, spaceHeight) = ocrHitSpace(currentPageView, pageResult) ?: return null
+                currentPageView.fileToViewRect(
+                    boundingBox.toSourceRect(
+                        imageWidth = spaceWidth.toInt(),
+                        imageHeight = spaceHeight.toInt(),
+                    ),
+                    fileCropRect,
+                )
+            }
             is ImageView -> {
                 val drawable = currentPageView.drawable ?: return null
                 val sourceRect = boundingBox.toSourceRect(

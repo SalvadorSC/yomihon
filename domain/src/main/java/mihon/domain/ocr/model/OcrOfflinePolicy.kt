@@ -63,4 +63,28 @@ object OcrOfflinePolicy {
         }
         return candidate
     }
+
+    /**
+     * Downloaded chapters are scanned when the user asked for auto OCR, and also when
+     * the effective engine is Chinese. Japanese stays behind the existing toggle.
+     */
+    fun shouldScanChapterAfterDownload(
+        model: OcrModel,
+        strictOffline: Boolean,
+        autoOnDownload: Boolean,
+    ): Boolean {
+        if (autoOnDownload) return true
+        return effectiveModel(model, strictOffline) == OcrModel.ZH_MLKIT
+    }
+
+    /**
+     * Reader pages grow Chinese regions in the background. A page already cached for
+     * the Chinese engine is left as-is. Other engines do not start this pass.
+     */
+    fun shouldDetectPageInReader(
+        effectiveModel: OcrModel,
+        cachedModel: OcrModel?,
+    ): Boolean {
+        return effectiveModel == OcrModel.ZH_MLKIT && cachedModel != OcrModel.ZH_MLKIT
+    }
 }

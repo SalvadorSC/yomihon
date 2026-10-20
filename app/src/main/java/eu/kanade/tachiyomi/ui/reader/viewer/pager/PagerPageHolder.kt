@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.databinding.ReaderErrorBinding
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.model.InsertPage
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import eu.kanade.tachiyomi.ui.reader.viewer.ReaderChinesePageScanner
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderOcrPageIdentity
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderOcrRegionSelection
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
@@ -26,7 +27,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
+import mihon.domain.ocr.interactor.ScanPageOcr
 import mihon.domain.ocr.repository.OcrRepository
+import mihon.domain.ocr.service.OcrPreferences
 import mihon.domain.panel.interactor.DetectPanels
 import okio.Buffer
 import okio.BufferedSource
@@ -55,6 +58,14 @@ class PagerPageHolder(
 
     private val ocrRepository: OcrRepository by injectLazy()
     private val detectPanels: DetectPanels by lazy { Injekt.get() }
+    private val chinesePageScanner by lazy {
+        ReaderChinesePageScanner(
+            scope = scope,
+            ocrPreferences = Injekt.get<OcrPreferences>(),
+            ocrRepository = ocrRepository,
+            scanPageOcr = Injekt.get<ScanPageOcr>(),
+        )
+    }
 
     private var panels: List<Panel> = emptyList()
     private var currentPanelIndex = -1
@@ -114,6 +125,7 @@ class PagerPageHolder(
         loadJob?.cancel()
         loadJob = null
         clearOcrPageIdentity()
+        chinesePageScanner.cancel()
         panelDetectionJob?.cancel()
         panelDetectionJob = null
     }
@@ -164,6 +176,7 @@ class PagerPageHolder(
         progressIndicator?.show()
         removeErrorLayout()
         setFileCropRect(null)
+        chinesePageScanner.cancel()
         clearCachedOcrResult()
     }
 
@@ -175,6 +188,7 @@ class PagerPageHolder(
         progressIndicator?.show()
         removeErrorLayout()
         setFileCropRect(null)
+        chinesePageScanner.cancel()
         clearCachedOcrResult()
     }
 
@@ -186,6 +200,7 @@ class PagerPageHolder(
         progressIndicator?.show()
         removeErrorLayout()
         setFileCropRect(null)
+        chinesePageScanner.cancel()
         clearCachedOcrResult()
     }
 
@@ -242,7 +257,16 @@ class PagerPageHolder(
                     pageBackground = loadResult.background
                 }
                 removeErrorLayout()
-                loadCachedOcrResult()
+                chinesePageScanner.onPageDisplayed(
+                    chapterId = page.chapter.chapter.id,
+                    pageIndex = page.index,
+                    isAnimated = loadResult.isAnimated,
+                    openStream = { loadResult.source.peek().inputStream() },
+                    onResult = { result ->
+                        setCachedOcrResult(result)
+                        viewer.activity.syncActiveOcrOverlay()
+                    },
+                )
                 maybeStartPanelDetection(loadResult)
             }
         } catch (e: Throwable) {
@@ -509,6 +533,7 @@ class PagerPageHolder(
         progressIndicator?.hide()
         showErrorLayout(error)
         setFileCropRect(null)
+        chinesePageScanner.cancel()
         clearCachedOcrResult()
     }
 
@@ -523,17 +548,6 @@ class PagerPageHolder(
     override fun onImageLoadError(error: Throwable?) {
         super.onImageLoadError(error)
         setError(error)
-    }
-
-    private fun loadCachedOcrResult() {
-        val chapterId = page.chapter.chapter.id ?: return clearCachedOcrResult()
-        scope.launchIO {
-            val cachedResult = ocrRepository.getCachedPage(chapterId, page.index)
-            withUIContext {
-                setCachedOcrResult(cachedResult)
-                viewer.activity.syncActiveOcrOverlay()
-            }
-        }
     }
 
     /**

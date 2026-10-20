@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import logcat.LogPriority
+import mihon.data.ocr.zh.MlKitChineseDetEngine
 import mihon.data.ocr.zh.MlKitChineseOcrEngine
 import mihon.domain.ocr.exception.OcrException
 import mihon.domain.ocr.model.OcrBoundingBox
@@ -55,6 +56,7 @@ class OcrRepositoryImpl(
     private var legacyEngine: LegacyOcrEngine? = null
     private var fastEngine: FastOcrEngine? = null
     private var zhMlkitEngine: MlKitChineseOcrEngine? = null
+    private var zhDetEngine: DetOcrEngine? = null
     private var glensEngine: GlensOcrEngine? = null
     private var owOcrEngine: OwOcrEngine? = null
     private var detEngine: DetOcrEngine? = null
@@ -136,10 +138,6 @@ class OcrRepositoryImpl(
         }
     }
 
-    private fun localOcrAvailable(): Boolean {
-        return environmentResult.isSuccess
-    }
-
     private fun engineFor(type: EngineType): OcrEngine {
         return when (type) {
             EngineType.FAST -> {
@@ -172,14 +170,17 @@ class OcrRepositoryImpl(
         }
     }
 
+    /**
+     * Chinese detection is the bundled ML Kit text blocks. Japanese local scans keep the
+     * unavailable detector, so they still fail over to Google Lens only when offline policy allows it.
+     */
     private fun detectionEngine(): DetOcrEngine {
-        return detEngine ?: (
-            if (localOcrAvailable()) {
-                UnavailableDetOcrEngine() // TODO: replace with real DetOcrEngine with a local model
-            } else {
-                UnavailableDetOcrEngine()
+        if (selectedModel() == OcrModel.ZH_MLKIT) {
+            return zhDetEngine ?: MlKitChineseDetEngine(chineseEngine()).also {
+                zhDetEngine = it
             }
-            ).also {
+        }
+        return detEngine ?: UnavailableDetOcrEngine().also {
             detEngine = it
         }
     }
@@ -626,6 +627,9 @@ class OcrRepositoryImpl(
 
             fastEngine?.close()
             fastEngine = null
+
+            zhDetEngine?.close()
+            zhDetEngine = null
 
             zhMlkitEngine?.close()
             zhMlkitEngine = null
